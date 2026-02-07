@@ -3,31 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Snake Solana - With Sound</title>
+    <title>Snake Solana Pro</title>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
     <style>
-        body { background-color: #8b9d5c; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: monospace; overflow: hidden; }
-        #score-board { font-size: 22px; font-weight: bold; color: #333; margin-bottom: 5px; width: 240px; display: flex; justify-content: space-between; }
-        .grid { width: 240px; height: 240px; background-color: #9bbc0f; border: 6px solid #333; display: flex; flex-wrap: wrap; }
-        .grid div { width: 24px; height: 24px; box-sizing: border-box; }
+        body { 
+            background-color: #8b9d5c; 
+            display: flex; flex-direction: column; align-items: center; 
+            justify-content: center; height: 100vh; margin: 0; 
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden; touch-action: none;
+        }
+        
+        #game-container { position: relative; }
+
+        #score-board { 
+            font-size: 20px; font-weight: bold; color: #333; 
+            margin-bottom: 5px; width: 250px; display: flex; justify-content: space-between;
+        }
+
+        .grid { 
+            width: 250px; height: 250px; 
+            background-color: #9bbc0f; 
+            border: 8px solid #333; 
+            display: flex; flex-wrap: wrap; 
+            position: relative;
+        }
+        .grid div { width: 25px; height: 25px; box-sizing: border-box; }
         .snake { background-color: #000; border: 1px solid #9bbc0f; }
-        .apple { background-color: #000; border-radius: 50%; }
-        .controls { margin-top: 20px; display: grid; grid-template-areas: ". up ." "left down right"; gap: 12px; }
-        .btn { width: 65px; height: 65px; background: #333; color: #9bbc0f; border: none; border-radius: 50%; font-weight: bold; font-size: 22px; display: flex; justify-content: center; align-items: center; box-shadow: 0 5px #222; }
-        .btn:active { box-shadow: 0 0 #222; transform: translateY(4px); }
+        .apple { background-color: #000; border-radius: 50%; animation: blink 0.5s infinite; }
+        
+        @keyframes blink { 50% { opacity: 0.5; } }
+
+        /* Menu Game Over */
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(139, 157, 92, 0.9);
+            display: none; flex-direction: column; align-items: center;
+            justify-content: center; z-index: 10; text-align: center;
+        }
+        #overlay h2 { color: #000; margin: 0; }
+        #overlay button { 
+            margin-top: 15px; background: #333; color: #9bbc0f; 
+            border: none; padding: 10px 20px; font-weight: bold; font-size: 16px;
+        }
+
+        /* Controls */
+        .controls {
+            margin-top: 15px; display: grid;
+            grid-template-areas: ". up ." "left down right"; gap: 10px;
+        }
+        .btn {
+            width: 65px; height: 65px; background: #333; color: #9bbc0f;
+            border: none; border-radius: 50%; font-size: 24px;
+            display: flex; justify-content: center; align-items: center;
+            box-shadow: 0 5px #111;
+        }
+        .btn:active { box-shadow: 0 0 #111; transform: translateY(4px); }
         .up { grid-area: up; } .left { grid-area: left; } .down { grid-area: down; } .right { grid-area: right; }
-        #wallet-section { margin-top: 15px; text-align: center; }
-        button#connectBtn { background: #333; color: #9bbc0f; border: none; padding: 10px 20px; font-weight: bold; border-radius: 5px; cursor: pointer; }
+
+        #wallet-section { margin-top: 10px; text-align: center; }
+        #connectBtn { background: #333; color: #9bbc0f; border: none; padding: 8px 15px; font-weight: bold; border-radius: 4px; }
     </style>
 </head>
 <body>
 
     <div id="score-board">
         <span>Score: <span id="score">0</span></span>
-        <span style="color: #701313;">Life: 1</span>
+        <span>$SNACK: <span id="tokenBalance">0</span></span>
     </div>
     
-    <div class="grid"></div>
+    <div id="game-container">
+        <div class="grid"></div>
+        <div id="overlay">
+            <h2>DIED!</h2>
+            <p id="final-msg">Token -1</p>
+            <button onclick="resetGame()">MAIN LAGI</button>
+        </div>
+    </div>
 
     <div class="controls">
         <button class="btn up" onclick="changeDir('UP')">▲</button>
@@ -38,30 +90,14 @@
 
     <div id="wallet-section">
         <button id="connectBtn" onclick="connectWallet()">CONNECT WALLET</button>
-        <div style="font-size: 11px; margin-top: 5px;">My Token: <span id="tokenBalance">0.00</span> $SNACK</div>
     </div>
 
     <script>
-        // --- SISTEM SUARA (WEB AUDIO API) ---
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        function playEatSound() {
-            const oscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            oscillator.type = 'square'; // Suara retro nokia
-            oscillator.frequency.setValueAtTime(600, audioCtx.currentTime);
-            oscillator.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.1);
-            gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-            oscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            oscillator.start();
-            oscillator.stop(audioCtx.currentTime + 0.1);
-        }
-
-        // --- KONFIGURASI GAME ---
-        const MINT_ADDRESS = "GANTI_DENGAN_MINT_ADDRESS_TOKEN_ANDA";
+        const MINT_ADDRESS = "ALAMAT_TOKEN_ANDA";
         const grid = document.querySelector('.grid');
+        const overlay = document.getElementById('overlay');
         const scoreDisplay = document.getElementById('score');
+        const tokenDisplay = document.getElementById('tokenBalance');
         
         let squares = [];
         let snake = [2, 1, 0];
@@ -70,9 +106,27 @@
         const width = 10;
         let score = 0;
         let intervalTime = 400; 
-        let interval = 0;
+        let gameInterval = 0;
+        let audioCtx = null;
 
-        // --- CREATE GRID ---
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function playSound(freq, duration, type = 'square') {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
         function createGrid() {
             for (let i = 0; i < 100; i++) {
                 const square = document.createElement('div');
@@ -82,11 +136,6 @@
         }
         createGrid();
 
-        function draw() {
-            squares.forEach(sq => sq.classList.remove('snake'));
-            snake.forEach(index => squares[index].classList.add('snake'));
-        }
-
         function move() {
             if (
                 (snake[0] + width >= 100 && direction === width) || 
@@ -95,25 +144,38 @@
                 (snake[0] - width < 0 && direction === -width) || 
                 squares[snake[0] + direction].classList.contains('snake')
             ) {
-                alert("GAME OVER! Skor: " + score);
-                return location.reload();
+                return gameOver();
             }
 
             const tail = snake.pop();
             squares[tail].classList.remove('snake');
             snake.unshift(snake[0] + direction);
             
-            // LOGIK MAKAN + SUARA
             if (squares[snake[0]].classList.contains('apple')) {
                 squares[snake[0]].classList.remove('apple');
                 squares[tail].classList.add('snake');
                 snake.push(tail);
                 score++;
                 scoreDisplay.innerText = score;
-                playEatSound(); // Panggil suara di sini
+                
+                // Efek Pro
+                playSound(600, 0.1);
+                if (navigator.vibrate) navigator.vibrate(50);
+                
+                // Percepat game
+                if (intervalTime > 150) {
+                    clearInterval(gameInterval);
+                    intervalTime -= 10;
+                    gameInterval = setInterval(move, intervalTime);
+                }
                 generateApple();
             }
             draw();
+        }
+
+        function draw() {
+            squares.forEach(sq => sq.classList.remove('snake'));
+            snake.forEach(index => squares[index].classList.add('snake'));
         }
 
         function generateApple() {
@@ -125,24 +187,33 @@
         generateApple();
 
         function changeDir(move) {
-            // Aktifkan Audio Context (Wajib untuk Chrome Android)
+            initAudio();
             if (audioCtx.state === 'suspended') audioCtx.resume();
-            
             if (move === 'UP' && direction !== width) direction = -width;
             if (move === 'DOWN' && direction !== -width) direction = width;
             if (move === 'LEFT' && direction !== 1) direction = -1;
             if (move === 'RIGHT' && direction !== -1) direction = 1;
         }
 
-        interval = setInterval(move, intervalTime);
+        function gameOver() {
+            clearInterval(gameInterval);
+            playSound(150, 0.5, 'sawtooth');
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            overlay.style.display = 'flex';
+        }
 
-        // Solana Wallet Function (Simpel)
+        function resetGame() {
+            location.reload();
+        }
+
         async function connectWallet() {
             if ("solana" in window) {
                 const resp = await window.solana.connect();
-                document.getElementById('connectBtn').innerText = "CONNECTED";
-            } else { alert("Gunakan Phantom Browser!"); }
+                document.getElementById('connectBtn').innerText = "OK";
+            } else { alert("Buka di Phantom!"); }
         }
+
+        gameInterval = setInterval(move, intervalTime);
     </script>
 </body>
 </html>
