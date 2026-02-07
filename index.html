@@ -3,18 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nokia Snake Solana - Button Edition</title>
+    <title>Snake Solana P2E</title>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
     <style>
         body { 
             background-color: #8b9d5c; 
             display: flex; flex-direction: column; align-items: center; 
             justify-content: center; height: 100vh; margin: 0; 
-            font-family: monospace;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
         }
-        #wallet-section { margin-top: 10px; text-align: center; }
-        button#connectBtn { background: #333; color: #9bbc0f; border: none; padding: 8px; font-weight: bold; border-radius: 4px; }
         
+        #score-board { 
+            font-size: 22px; font-weight: bold; color: #333; 
+            margin-bottom: 5px; width: 240px; display: flex; justify-content: space-between;
+        }
+
         .grid { 
             width: 240px; height: 240px; 
             background-color: #9bbc0f; 
@@ -24,36 +28,45 @@
         .grid div { width: 24px; height: 24px; box-sizing: border-box; }
         .snake { background-color: #000; border: 1px solid #9bbc0f; }
         .apple { background-color: #000; border-radius: 50%; }
-        
-        #score-board { font-size: 20px; font-weight: bold; color: #333; margin: 5px; }
 
-        /* Tombol Kontrol di Layar */
+        /* Kontrol D-Pad */
         .controls {
-            margin-top: 15px;
+            margin-top: 20px;
             display: grid;
             grid-template-areas: 
                 ". up ."
                 "left down right";
-            gap: 10px;
+            gap: 12px;
         }
         .btn {
-            width: 60px; height: 60px;
+            width: 65px; height: 65px;
             background: #333; color: #9bbc0f;
             border: none; border-radius: 50%;
-            font-weight: bold; font-size: 18px;
+            font-weight: bold; font-size: 22px;
             display: flex; justify-content: center; align-items: center;
-            box-shadow: 0 4px #222;
+            box-shadow: 0 5px #222;
         }
         .btn:active { box-shadow: 0 0 #222; transform: translateY(4px); }
         .up { grid-area: up; }
         .left { grid-area: left; }
         .down { grid-area: down; }
         .right { grid-area: right; }
+
+        #wallet-section { margin-top: 15px; text-align: center; }
+        button#connectBtn { 
+            background: #333; color: #9bbc0f; border: none; 
+            padding: 10px 20px; font-weight: bold; border-radius: 5px;
+            cursor: pointer;
+        }
+        .token-info { font-size: 12px; color: #333; margin-top: 5px; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <div id="score-board">Score: 0</div>
+    <div id="score-board">
+        <span>Score: <span id="score">0</span></span>
+        <span style="color: #701313;">Life: 1</span>
+    </div>
     
     <div class="grid"></div>
 
@@ -66,12 +79,15 @@
 
     <div id="wallet-section">
         <button id="connectBtn" onclick="connectWallet()">CONNECT WALLET</button>
-        <div style="font-size: 11px; margin-top: 5px; color: #333;">Balance: <span id="balance">0.00</span> SOL</div>
+        <div class="token-info">My Token: <span id="tokenBalance">0.00</span> $SNACK</div>
     </div>
 
     <script>
+        // --- KONFIGURASI ---
+        const MINT_ADDRESS = "GANTI_DENGAN_MINT_ADDRESS_TOKEN_ANDA"; // Masukkan alamat token anda di sini nanti
         const grid = document.querySelector('.grid');
-        const balanceDisplay = document.getElementById('balance');
+        const tokenDisplay = document.getElementById('tokenBalance');
+        const scoreDisplay = document.getElementById('score');
         const connectBtn = document.getElementById('connectBtn');
         
         let squares = [];
@@ -82,19 +98,39 @@
         let score = 0;
         let intervalTime = 400; 
         let interval = 0;
+        let userWallet = null;
 
-        // --- SOLANA LOGIC ---
+        // --- KONEKSI SOLANA & SPL TOKEN ---
         async function connectWallet() {
             if ("solana" in window) {
-                const resp = await window.solana.connect();
-                const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
-                const balance = await connection.getBalance(resp.publicKey);
-                balanceDisplay.innerText = (balance / solanaWeb3.LAMPORTS_PER_SOL).toFixed(4);
-                connectBtn.innerText = "CONNECTED";
-            } else { alert("Gunakan Phantom Browser!"); }
+                try {
+                    const resp = await window.solana.connect();
+                    userWallet = resp.publicKey;
+                    connectBtn.innerText = "WALLET CONNECTED";
+                    updateTokenBalance();
+                } catch (err) { console.error("User menolak koneksi"); }
+            } else {
+                alert("Harap buka di browser aplikasi Phantom/Solflare!");
+            }
         }
 
-        // --- CREATE GAME GRID ---
+        async function updateTokenBalance() {
+            if (!userWallet || MINT_ADDRESS === "GANTI_DENGAN_MINT_ADDRESS_TOKEN_ANDA") return;
+            
+            const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
+            try {
+                const tokenAccounts = await connection.getParsedTokenAccountsByOwner(userWallet, {
+                    mint: new solanaWeb3.PublicKey(MINT_ADDRESS)
+                });
+
+                if (tokenAccounts.value.length > 0) {
+                    const amount = tokenAccounts.value[0].account.data.parsed.info.tokenAmount.uiAmount;
+                    tokenDisplay.innerText = amount.toFixed(2);
+                }
+            } catch (err) { console.error("Gagal mengambil balance token"); }
+        }
+
+        // --- LOGIK GAME ---
         function createGrid() {
             for (let i = 0; i < 100; i++) {
                 const square = document.createElement('div');
@@ -110,7 +146,7 @@
         }
 
         function move() {
-            // Cek Tabrakan (1 Nyawa)
+            // Logik Mati (1 Nyawa)
             if (
                 (snake[0] + width >= 100 && direction === width) || 
                 (snake[0] % width === width - 1 && direction === 1) || 
@@ -118,20 +154,21 @@
                 (snake[0] - width < 0 && direction === -width) || 
                 squares[snake[0] + direction].classList.contains('snake')
             ) {
-                alert("GAME OVER! Skor: " + score);
-                return location.reload(); // Restart
+                alert("GAME OVER! Token Nyawa Berkurang 1");
+                return location.reload(); 
             }
 
             const tail = snake.pop();
             squares[tail].classList.remove('snake');
             snake.unshift(snake[0] + direction);
             
+            // Logik Makan (1 Token 1 Makan)
             if (squares[snake[0]].classList.contains('apple')) {
                 squares[snake[0]].classList.remove('apple');
                 squares[tail].classList.add('snake');
                 snake.push(tail);
                 score++;
-                document.getElementById('score-board').innerText = 'Score: ' + score;
+                scoreDisplay.innerText = score;
                 generateApple();
             }
             draw();
@@ -145,7 +182,6 @@
         }
         generateApple();
 
-        // --- KONTROL TOMBOL LAYAR ---
         function changeDir(move) {
             if (move === 'UP' && direction !== width) direction = -width;
             if (move === 'DOWN' && direction !== -width) direction = width;
@@ -153,6 +189,7 @@
             if (move === 'RIGHT' && direction !== -1) direction = 1;
         }
 
+        // Mulai Game
         interval = setInterval(move, intervalTime);
     </script>
 </body>
