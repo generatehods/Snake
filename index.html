@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nokia Snake Solana - Button Edition</title>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <style>
+        body { 
+            background-color: #8b9d5c; 
+            display: flex; flex-direction: column; align-items: center; 
+            justify-content: center; height: 100vh; margin: 0; 
+            font-family: monospace;
+        }
+        #wallet-section { margin-top: 10px; text-align: center; }
+        button#connectBtn { background: #333; color: #9bbc0f; border: none; padding: 8px; font-weight: bold; border-radius: 4px; }
+        
+        .grid { 
+            width: 240px; height: 240px; 
+            background-color: #9bbc0f; 
+            border: 6px solid #333; 
+            display: flex; flex-wrap: wrap; 
+        }
+        .grid div { width: 24px; height: 24px; box-sizing: border-box; }
+        .snake { background-color: #000; border: 1px solid #9bbc0f; }
+        .apple { background-color: #000; border-radius: 50%; }
+        
+        #score-board { font-size: 20px; font-weight: bold; color: #333; margin: 5px; }
+
+        /* Tombol Kontrol di Layar */
+        .controls {
+            margin-top: 15px;
+            display: grid;
+            grid-template-areas: 
+                ". up ."
+                "left down right";
+            gap: 10px;
+        }
+        .btn {
+            width: 60px; height: 60px;
+            background: #333; color: #9bbc0f;
+            border: none; border-radius: 50%;
+            font-weight: bold; font-size: 18px;
+            display: flex; justify-content: center; align-items: center;
+            box-shadow: 0 4px #222;
+        }
+        .btn:active { box-shadow: 0 0 #222; transform: translateY(4px); }
+        .up { grid-area: up; }
+        .left { grid-area: left; }
+        .down { grid-area: down; }
+        .right { grid-area: right; }
+    </style>
+</head>
+<body>
+
+    <div id="score-board">Score: 0</div>
+    
+    <div class="grid"></div>
+
+    <div class="controls">
+        <button class="btn up" onclick="changeDir('UP')">▲</button>
+        <button class="btn left" onclick="changeDir('LEFT')">◀</button>
+        <button class="btn down" onclick="changeDir('DOWN')">▼</button>
+        <button class="btn right" onclick="changeDir('RIGHT')">▶</button>
+    </div>
+
+    <div id="wallet-section">
+        <button id="connectBtn" onclick="connectWallet()">CONNECT WALLET</button>
+        <div style="font-size: 11px; margin-top: 5px; color: #333;">Balance: <span id="balance">0.00</span> SOL</div>
+    </div>
+
+    <script>
+        const grid = document.querySelector('.grid');
+        const balanceDisplay = document.getElementById('balance');
+        const connectBtn = document.getElementById('connectBtn');
+        
+        let squares = [];
+        let snake = [2, 1, 0];
+        let appleIndex = 0;
+        let direction = 1;
+        const width = 10;
+        let score = 0;
+        let intervalTime = 400; 
+        let interval = 0;
+
+        // --- SOLANA LOGIC ---
+        async function connectWallet() {
+            if ("solana" in window) {
+                const resp = await window.solana.connect();
+                const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
+                const balance = await connection.getBalance(resp.publicKey);
+                balanceDisplay.innerText = (balance / solanaWeb3.LAMPORTS_PER_SOL).toFixed(4);
+                connectBtn.innerText = "CONNECTED";
+            } else { alert("Gunakan Phantom Browser!"); }
+        }
+
+        // --- CREATE GAME GRID ---
+        function createGrid() {
+            for (let i = 0; i < 100; i++) {
+                const square = document.createElement('div');
+                grid.appendChild(square);
+                squares.push(square);
+            }
+        }
+        createGrid();
+
+        function draw() {
+            squares.forEach(sq => sq.classList.remove('snake'));
+            snake.forEach(index => squares[index].classList.add('snake'));
+        }
+
+        function move() {
+            // Cek Tabrakan (1 Nyawa)
+            if (
+                (snake[0] + width >= 100 && direction === width) || 
+                (snake[0] % width === width - 1 && direction === 1) || 
+                (snake[0] % width === 0 && direction === -1) || 
+                (snake[0] - width < 0 && direction === -width) || 
+                squares[snake[0] + direction].classList.contains('snake')
+            ) {
+                alert("GAME OVER! Skor: " + score);
+                return location.reload(); // Restart
+            }
+
+            const tail = snake.pop();
+            squares[tail].classList.remove('snake');
+            snake.unshift(snake[0] + direction);
+            
+            if (squares[snake[0]].classList.contains('apple')) {
+                squares[snake[0]].classList.remove('apple');
+                squares[tail].classList.add('snake');
+                snake.push(tail);
+                score++;
+                document.getElementById('score-board').innerText = 'Score: ' + score;
+                generateApple();
+            }
+            draw();
+        }
+
+        function generateApple() {
+            do {
+                appleIndex = Math.floor(Math.random() * squares.length);
+            } while (squares[appleIndex].classList.contains('snake'));
+            squares[appleIndex].classList.add('apple');
+        }
+        generateApple();
+
+        // --- KONTROL TOMBOL LAYAR ---
+        function changeDir(move) {
+            if (move === 'UP' && direction !== width) direction = -width;
+            if (move === 'DOWN' && direction !== -width) direction = width;
+            if (move === 'LEFT' && direction !== 1) direction = -1;
+            if (move === 'RIGHT' && direction !== -1) direction = 1;
+        }
+
+        interval = setInterval(move, intervalTime);
+    </script>
+</body>
+</html>
