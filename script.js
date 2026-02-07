@@ -113,4 +113,30 @@
 
     interval = setInterval(move, intervalTime);
 </script>
+// Kita gunakan library tambahan dari CDN agar bisa deteksi banyak wallet
+async function connectWallet() {
+    // 1. Cek apakah ada wallet provider di browser (Phantom, Solflare, dll)
+    const provider = window.solana || window.solflare || window.backpack;
+
+    if (provider) {
+        try {
+            // 2. Minta izin koneksi
+            const resp = await provider.connect();
+            userWallet = resp.publicKey;
+            
+            // 3. Ganti teks tombol dengan alamat wallet pendek
+            const addr = userWallet.toString();
+            connectBtn.innerText = addr.slice(0,4) + "..." + addr.slice(-4);
+            
+            console.log("Konek ke: ", addr);
+            updateTokenBalance(); // Cek saldo token $SNACK
+        } catch (err) {
+            console.error("User membatalkan koneksi");
+        }
+    } else {
+        // Jika tidak ada wallet sama sekali
+        alert("Wallet tidak ditemukan! Silakan gunakan browser di dalam aplikasi Phantom atau Solflare.");
+        window.open("https://phantom.app/", "_blank");
+    }
+}
 
